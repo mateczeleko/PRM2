@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,9 +51,14 @@ class MainActivity : ComponentActivity() {
             PRM2Theme {
                 val navController = rememberNavController()
                 var diaryEntries by remember { mutableStateOf(listOf<DiaryEntry>()) }
+                fun refreshEntries() {
+                    getEntries(db) { entries ->
+                        diaryEntries = entries
+                    }
+                }
 
-                getEntries { entries ->
-                    diaryEntries = entries
+                LaunchedEffect(Unit) {
+                    refreshEntries()
                 }
 
                 Scaffold(
@@ -62,7 +66,7 @@ class MainActivity : ComponentActivity() {
                         .fillMaxSize()
                         .padding(bottom = 16.dp),
                     topBar = {
-                        TopAppBar(title = { Text("Diary") })
+                        TopAppBar(title = { Button(onClick = { navController.navigate(route = "home") }, content = { Text("Diary")} ) })
                     }
                 ) { innerPadding ->
                     NavHost(navController = navController, startDestination = "home") {
@@ -72,7 +76,8 @@ class MainActivity : ComponentActivity() {
                         composable("addEntry") {
                             DiaryEntryScreen(
                                 onSave = { entry ->
-                                    addEntry(entry)
+                                    addEntry(entry, db)
+                                    refreshEntries()
                                     navController.navigate("home")
                                 },
                                 getLocation = { callback ->
@@ -83,30 +88,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+
         }
     }
-    private fun addEntry(entry: DiaryEntry) {
-        db.collection("entries")
-            .add(entry)
-            .addOnSuccessListener { documentReference ->
-                Log.d(TAG, "DocumentSnapshot added with ID: ${documentReference.id}")
-            }
-            .addOnFailureListener { e ->
-                Log.w(TAG, "Error adding document", e)
-            }
-    }
 
-    private fun getEntries(callback: (List<DiaryEntry>) -> Unit) {
-        db.collection("entries")
-            .get()
-            .addOnSuccessListener { result ->
-                val entries = result.map { document -> document.toObject(DiaryEntry::class.java) }
-                callback(entries)
-            }
-            .addOnFailureListener { exception ->
-                Log.w(TAG, "Error getting documents.", exception)
-            }
-    }
 
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation(callback: (Location?) -> Unit) {
@@ -121,19 +106,10 @@ class MainActivity : ComponentActivity() {
                 callback(location)
             }
     }
-
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1000
     }
 }
-data class DiaryEntry(
-    val title: String = "",
-    val content: String = "",
-    val imageUrl: String? = null,
-    val audioUrl: String? = null,
-    val location: String? = null,
-    val timestamp: Long = System.currentTimeMillis()
-)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, diaryEntries: List<DiaryEntry>, modifier: Modifier) {
@@ -162,7 +138,6 @@ fun HomeScreen(navController: NavController, diaryEntries: List<DiaryEntry>, mod
         }
     }
 }
-
 @Composable
 fun DiaryEntryCard(entry: DiaryEntry) {
     Card(
@@ -187,7 +162,6 @@ fun DiaryEntryCard(entry: DiaryEntry) {
         }
     }
 }
-
 fun formatDate(timestamp: Long): String {
     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
     val date = java.util.Date(timestamp)
@@ -223,7 +197,6 @@ fun DiaryEntryScreen(onSave: (DiaryEntry) -> Unit, getLocation: (callback: (Loca
                 .fillMaxWidth()
                 .weight(1f)
         )
-        // Przyciski do dodawania obrazu i nagrań audio
         Button(onClick = { /* launch image picker */ }) {
             Text("Add Image")
         }
@@ -242,6 +215,7 @@ fun DiaryEntryScreen(onSave: (DiaryEntry) -> Unit, getLocation: (callback: (Loca
                         location = location?.let { "${it.latitude}, ${it.longitude}" }
                     )
                     onSave(entry)
+
                 }
             },
             modifier = Modifier.align(Alignment.End)
