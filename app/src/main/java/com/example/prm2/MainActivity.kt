@@ -137,7 +137,7 @@ fun HomeScreen(navController: NavController, diaryEntries: List<String>) {
                         text = entry,
                         modifier = Modifier.padding(16.dp)
                     )
-
+//n
                 }
             }
         }
