@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "136215828383",
+    "project_id": "prm2-feece",
+    "storage_bucket": "prm2-feece.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:136215828383:android:6ff0a91a9b743cdd480faa",
+        "android_client_info": {
+          "package_name": "com.example.prm2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5kveqIc0y7PcxGJzOWIDNQacIUMa9ylM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
