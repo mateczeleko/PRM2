@@ -10,7 +10,8 @@ data class DiaryEntry(
     val imageUrl: String? = null,
     val audioUrl: String? = null,
     val location: String? = null,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val cityName: String? = null
 )
 
 fun addEntry(entry: DiaryEntry, db: FirebaseFirestore) {
