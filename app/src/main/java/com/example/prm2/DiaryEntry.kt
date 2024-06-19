@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 
 data class DiaryEntry(
+    val id: String = "",
     val title: String = "",
     val content: String = "",
     val imageUrl: String? = null,
@@ -25,14 +26,31 @@ fun addEntry(entry: DiaryEntry, db: FirebaseFirestore) {
         }
 }
 
-fun getEntries(db: FirebaseFirestore, callback: (List<DiaryEntry>) -> Unit) {
+fun updateEntry(entry: DiaryEntry, db: FirebaseFirestore) {
+    db.collection("entries")
+        .document(entry.id)
+        .set(entry)
+        .addOnSuccessListener { Log.d(TAG, "DocumentSnapshot successfully updated!") }
+        .addOnFailureListener { e -> Log.w(TAG, "Error updating document", e) }
+}
+fun getEntries(db: FirebaseFirestore, callback: (Map<String, DiaryEntry>) -> Unit) {
     db.collection("entries")
         .get()
         .addOnSuccessListener { result ->
-            val entries = result.map { document -> document.toObject(DiaryEntry::class.java) }
+            // Convert the whole Query snapshot to map document id to diaryentry
+            val entries = result.map { document -> document.id to document.toObject(DiaryEntry::class.java) }.toMap()
             callback(entries)
+//            val entries = result.map { document -> document.toObject(DiaryEntry::class.java) }
+//            callback(entries)
         }
         .addOnFailureListener { exception ->
             Log.w(TAG, "Error getting documents.", exception)
         }
+}
+fun printDiaryEntryIds(db: FirebaseFirestore) {
+    getEntries(db) { entries ->
+        for ((id, entry) in entries) {
+            println("Diary Entry ID: $id")
+        }
+    }
 }
