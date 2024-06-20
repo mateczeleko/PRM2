@@ -3,10 +3,13 @@ package com.example.prm2
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
+import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -45,11 +48,23 @@ import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.GoogleMap
+import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.ktx.storage
+import com.google.protobuf.ByteString
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.IOException
 import java.util.Locale
 
+private var mediaRecorder: MediaRecorder? = null
+private var mediaPlayer: MediaPlayer? = null
+private var output: String? = null
 
 @Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
@@ -66,6 +81,7 @@ class MainActivity : ComponentActivity() {
         )
     }
     lateinit var geofencingClient: GeofencingClient
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,12 +109,20 @@ class MainActivity : ComponentActivity() {
                         .padding(bottom = 16.dp),
 
                     topBar = {
-                        TopAppBar(title = { Button(onClick = { navController.navigate(route = "home") }, content = { Text("Diary")}) })
+                        TopAppBar(title = {
+                            Button(
+                                onClick = { navController.navigate(route = "home") },
+                                content = { Text("Diary") })
+                        })
                     }
                 ) { innerPadding ->
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
-                            HomeScreen(navController = navController, diaryEntries = diaryEntries, modifier = Modifier.padding(innerPadding))
+                            HomeScreen(
+                                navController = navController,
+                                diaryEntries = diaryEntries,
+                                modifier = Modifier.padding(innerPadding)
+                            )
                         }
                         composable("addEntry") {
                             DiaryEntryScreen(
@@ -116,7 +140,12 @@ class MainActivity : ComponentActivity() {
                         composable("entry/{id}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("id") ?: ""
                             val entry = diaryEntries.get(id) ?: DiaryEntry()
-                            DiaryEntryDetailScreen(navController, id, entry, modifier = Modifier.padding(innerPadding))
+                            DiaryEntryDetailScreen(
+                                navController,
+                                id,
+                                entry,
+                                modifier = Modifier.padding(innerPadding)
+                            )
 
                         }
                         composable("editEntry/{id}") { backStackEntry ->
@@ -142,18 +171,21 @@ class MainActivity : ComponentActivity() {
         }
 
     }
-    fun getCityName(lat: Double,long: Double):String{
+
+    fun getCityName(lat: Double, long: Double): String {
         val geoCoder = Geocoder(this, Locale.getDefault())
-        return geoCoder.getFromLocation(lat,long,1)?.let { address ->
+        return geoCoder.getFromLocation(lat, long, 1)?.let { address ->
             return address[0].locality
         } ?: "unknown city"
     }
+
     fun getGeofenceRequest(): GeofencingRequest {
         return GeofencingRequest.Builder().apply {
             setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
             addGeofences(geofenceList)
         }.build()
     }
+
     fun addGeofenceRequest() {
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -183,6 +215,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     fun createGeofence(googleMap: GoogleMap) {
         //Write here for the geo fence
         googleMap.setOnMapClickListener { latLng ->
@@ -198,6 +231,7 @@ class MainActivity : ComponentActivity() {
             addGeofenceRequest()
         }
     }
+
     fun removeGeofence() {
         geofencingClient.removeGeofences(geofencePendingIntent).run {
             addOnSuccessListener {
@@ -216,9 +250,23 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation(callback: (Location?) -> Unit) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
             return
         }
         fusedLocationClient.lastLocation
@@ -226,9 +274,11 @@ class MainActivity : ComponentActivity() {
                 callback(location)
             }
     }
+
     companion object {
         const val LOCATION_PERMISSION_REQUEST_CODE = 1000
     }
+
     @Composable
     fun DiaryEntryScreen(
         onSave: (DiaryEntry) -> Unit,
@@ -236,12 +286,15 @@ class MainActivity : ComponentActivity() {
         getLocation: (callback: (Location?) -> Unit) -> Unit,
         entry: DiaryEntry? = null
     ) {
-        var title by remember { mutableStateOf(TextFieldValue(text = entry?.title?: "")) }
-        var content by remember { mutableStateOf(TextFieldValue(text = entry?.content?: "")) }
+
+        var audioBlob by remember { mutableStateOf<Blob?>(null) }
+        var title by remember { mutableStateOf(TextFieldValue(text = entry?.title ?: "")) }
+        var content by remember { mutableStateOf(TextFieldValue(text = entry?.content ?: "")) }
         var imageUri by remember { mutableStateOf<Uri?>(null) }
         var audioUri by remember { mutableStateOf<Uri?>(null) }
         var location by remember { mutableStateOf<Location?>(null) }
         val context = LocalContext.current
+        var isRecording by remember { mutableStateOf(false) }
         Column(modifier = modifier.fillMaxSize()) {
             Text(
                 text = "New Diary Entry",
@@ -266,8 +319,19 @@ class MainActivity : ComponentActivity() {
             Button(onClick = { /* launch image picker */ }) {
                 Text("Add Image")
             }
-            Button(onClick = { /* launch audio recorder */ }) {
-                Text("Add Audio")
+            Button(onClick = {
+                if (isRecording) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        audioBlob = stopRecording(title.text)
+                        isRecording = false
+                    }
+
+                } else {
+                    startRecording(context)
+                    isRecording = true
+                }
+            }) {
+                Text(if (isRecording) "Stop Recording" else "Start Recording")
             }
             Button(
                 onClick = {
@@ -277,9 +341,13 @@ class MainActivity : ComponentActivity() {
                             title = title.text,
                             content = content.text,
                             imageUrl = imageUri?.toString(),
+                            audioData = audioBlob,
                             audioUrl = audioUri?.toString(),
                             location = location?.let { "${it.latitude}, ${it.longitude}" },
-                            cityName = getCityName(location?.latitude ?: 0.0, location?.longitude ?: 0.0),
+                            cityName = getCityName(
+                                location?.latitude ?: 0.0,
+                                location?.longitude ?: 0.0
+                            ),
                         )
                         onSave(entry)
                     }
@@ -291,21 +359,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController, diaryEntries: Map<String, DiaryEntry>, modifier: Modifier) {
+fun HomeScreen(
+    navController: NavController,
+    diaryEntries: Map<String, DiaryEntry>,
+    modifier: Modifier
+) {
 
     Column(
         modifier = modifier.fillMaxSize(),
     ) {
-            TopAppBar(
-                title = { Text("Diary Entries") },
-            )
+        TopAppBar(
+            title = { Text("Diary Entries") },
+        )
 
 
         LazyColumn() {
             items(diaryEntries.keys.toList()) { key ->
-                DiaryEntryCard(diaryEntries.get(key)!!, navController,key)
+                DiaryEntryCard(diaryEntries.get(key)!!, navController, key)
             }
 
         }
@@ -315,45 +388,57 @@ fun HomeScreen(navController: NavController, diaryEntries: Map<String, DiaryEntr
         FloatingActionButton(
             modifier = Modifier.offset(x = -16.dp, y = -16.dp),
             onClick = { navController.navigate("addEntry") },
-            content = { Icon(Icons.Filled.Add, contentDescription = stringResource(id = R.string.add_entry)) }
+            content = {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = stringResource(id = R.string.add_entry)
+                )
+            }
         )
     }
 }
+
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DiaryEntryDetailScreen(navController: NavController, id: String, entry: DiaryEntry, modifier: Modifier){
-Scaffold(modifier = modifier) {
-    Column(modifier = Modifier.padding(40.dp)) {
-        Text(text = "Title: ${entry.title}", style = MaterialTheme.typography.labelSmall)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "Content: ${entry.content}", style = MaterialTheme.typography.bodySmall)
-        Spacer(modifier = Modifier.height(8.dp))
-        entry.imageUrl?.let {
-            Text(text = "Image URL: $it", style = MaterialTheme.typography.bodySmall)
+fun DiaryEntryDetailScreen(
+    navController: NavController,
+    id: String,
+    entry: DiaryEntry,
+    modifier: Modifier
+) {
+    Scaffold(modifier = modifier) {
+        Column(modifier = Modifier.padding(40.dp)) {
+            Text(text = "Title: ${entry.title}", style = MaterialTheme.typography.labelSmall)
             Spacer(modifier = Modifier.height(8.dp))
-        }
-        entry.audioUrl?.let {
-            Text(text = "Audio URL: $it", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Content: ${entry.content}", style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(8.dp))
-        }
+            entry.imageUrl?.let {
+                Text(text = "Image URL: $it", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            entry.audioUrl?.let {
+                Text(text = "Audio URL: $it", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-        Text(text = "Location: ${entry.location}", style = MaterialTheme.typography.bodySmall)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = "City: ${entry.cityName}", style = MaterialTheme.typography.bodySmall)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Timestamp: ${formatDate(entry.timestamp)}",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Button(onClick = {
-            navController.navigate("editEntry/${id}")
-        }) {
-            Text("Edit")
+            Text(text = "Location: ${entry.location}", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "City: ${entry.cityName}", style = MaterialTheme.typography.bodySmall)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Timestamp: ${formatDate(entry.timestamp)}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Button(onClick = {
+                navController.navigate("editEntry/${id}")
+            }) {
+                Text("Edit")
+            }
         }
     }
 }
-}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) {
@@ -388,6 +473,61 @@ fun formatDate(timestamp: Long): String {
     return sdf.format(date)
 }
 
+fun startRecording(context: Context) {
+    output = "${context.externalCacheDir?.absolutePath}/recording.3gp"
+    Log.d("Recording", "Output file: $output")
+
+    mediaRecorder = MediaRecorder().apply {
+        try {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+            setOutputFile(output)
+
+            prepare()
+            start()
+            Log.d("Recording", "Recording started")
+        } catch (e: Exception) {
+            Log.e("Recording", "Error starting recording", e)
+        }
+    }
+}
+
+@SuppressLint("RestrictedApi")
+suspend fun stopRecording(title: String): Blob {
+    mediaRecorder?.apply {
+        stop()
+        release()
+    }
+    mediaRecorder = null
+    val bomba = title
+    val storage = Firebase.storage
+    val storageRef = storage.reference.child("audio/$bomba.3gp")
+    delay(1000)
+    val audioFile = File(output!!)
+    val audioData = audioFile.readBytes()
+    val audioBlob = Blob.fromBytes(audioData)
+    Log.d("Audio data size", "${audioData.size}")
+    val uploadTask = storageRef.putBytes(audioBlob.toBytes())
+    return audioBlob
+}
+
+//fun startPlaying() {
+//    mediaPlayer = MediaPlayer().apply {
+//        try {
+//            setDataSource(output)
+//            prepare()
+//            start()
+//        } catch (e: IOException) {
+//            e.printStackTrace()
+//        }
+//    }
+//}
+//
+//fun stopPlaying() {
+//    mediaPlayer?.release()
+//    mediaPlayer = null
+//}
 
 
 
