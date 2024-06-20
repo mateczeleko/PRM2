@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -109,10 +111,20 @@ class MainActivity : ComponentActivity() {
                         .padding(bottom = 16.dp),
 
                     topBar = {
-                        TopAppBar(title = {
-                            Button(
-                                onClick = { navController.navigate(route = "home") },
-                                content = { Text("Diary") })
+                        TopAppBar(
+                            title = {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    FloatingActionButton(
+                                        onClick = { navController.navigate(route = "home") },
+                                        content = { Icon(
+                                            imageVector = Icons.Filled.Home,
+                                            contentDescription = null
+                                        ) },
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+
+
                         })
                     }
                 ) { innerPadding ->
@@ -163,6 +175,9 @@ class MainActivity : ComponentActivity() {
                                     getCurrentLocation(callback)
                                 }
                             )
+                        }
+                        composable("map") {
+                            GoogleMapScreen()
                         }
                     }
                 }
@@ -373,6 +388,15 @@ fun HomeScreen(
     ) {
         TopAppBar(
             title = { Text("Diary Entries") },
+            actions = {
+                IconButton(onClick = { navController.navigate("map") }) {
+                    Icon(
+                        Icons.Filled.Place,
+//                        contentDescription = stringResource(id = R.string.add_entry)
+                        contentDescription = null
+                    )
+                }
+            }
         )
 
 

@@ -51,7 +51,9 @@ android {
 }
 
 dependencies {
-
+    implementation("com.google.maps.android:maps-compose:5.0.3")
+    implementation("com.google.maps.android:maps-compose-utils:5.0.3")
+    implementation ("com.google.maps.android:maps-compose-widgets:5.0.3")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
