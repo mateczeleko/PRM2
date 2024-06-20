@@ -66,11 +66,9 @@ class MainActivity : ComponentActivity() {
         )
     }
     lateinit var geofencingClient: GeofencingClient
-
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-//        printDiaryEntryIds(db)
         geofencingClient = LocationServices.getGeofencingClient(this)
 //        createGeofence(googleMap = null)
 //        removeGeofence()
@@ -95,20 +93,12 @@ class MainActivity : ComponentActivity() {
                         .padding(bottom = 16.dp),
 
                     topBar = {
-                        TopAppBar(title = {
-                            Button(
-                                onClick = { navController.navigate(route = "home") },
-                                content = { Text("Diary") })
-                        })
+                        TopAppBar(title = { Button(onClick = { navController.navigate(route = "home") }, content = { Text("Diary")}) })
                     }
                 ) { innerPadding ->
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
-                            HomeScreen(
-                                navController = navController,
-                                diaryEntries = diaryEntries,
-                                modifier = Modifier.padding(innerPadding)
-                            )
+                            HomeScreen(navController = navController, diaryEntries = diaryEntries, modifier = Modifier.padding(innerPadding))
                         }
                         composable("addEntry") {
                             DiaryEntryScreen(
@@ -126,14 +116,16 @@ class MainActivity : ComponentActivity() {
                         composable("entry/{id}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("id") ?: ""
                             val entry = diaryEntries.get(id) ?: DiaryEntry()
-                            DiaryEntryDetailScreen(entry, modifier = Modifier.padding(innerPadding))
+                            DiaryEntryDetailScreen(navController, id, entry, modifier = Modifier.padding(innerPadding))
+
                         }
                         composable("editEntry/{id}") { backStackEntry ->
                             val id = backStackEntry.arguments?.getString("id") ?: ""
                             val entry = diaryEntries.get(id) ?: DiaryEntry()
                             DiaryEntryScreen(
-                                onSave = { newEntry ->
-                                    addEntry(newEntry, db)
+                                entry = entry,
+                                onSave = { updatedEntry ->
+                                    updateEntry(id, updatedEntry, db)
                                     refreshEntries()
                                     navController.navigate("home")
                                 },
@@ -150,21 +142,18 @@ class MainActivity : ComponentActivity() {
         }
 
     }
-
-    fun getCityName(lat: Double, long: Double): String {
+    fun getCityName(lat: Double,long: Double):String{
         val geoCoder = Geocoder(this, Locale.getDefault())
-        return geoCoder.getFromLocation(lat, long, 1)?.let { address ->
+        return geoCoder.getFromLocation(lat,long,1)?.let { address ->
             return address[0].locality
         } ?: "unknown city"
     }
-
     fun getGeofenceRequest(): GeofencingRequest {
         return GeofencingRequest.Builder().apply {
             setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
             addGeofences(geofenceList)
         }.build()
     }
-
     fun addGeofenceRequest() {
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -194,7 +183,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
     fun createGeofence(googleMap: GoogleMap) {
         //Write here for the geo fence
         googleMap.setOnMapClickListener { latLng ->
@@ -210,7 +198,6 @@ class MainActivity : ComponentActivity() {
             addGeofenceRequest()
         }
     }
-
     fun removeGeofence() {
         geofencingClient.removeGeofences(geofencePendingIntent).run {
             addOnSuccessListener {
@@ -229,23 +216,9 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation(callback: (Location?) -> Unit) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ),
-                LOCATION_PERMISSION_REQUEST_CODE
-            )
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
             return
         }
         fusedLocationClient.lastLocation
@@ -253,19 +226,18 @@ class MainActivity : ComponentActivity() {
                 callback(location)
             }
     }
-
     companion object {
         const val LOCATION_PERMISSION_REQUEST_CODE = 1000
     }
-
     @Composable
     fun DiaryEntryScreen(
         onSave: (DiaryEntry) -> Unit,
         modifier: Modifier,
-        getLocation: (callback: (Location?) -> Unit) -> Unit
+        getLocation: (callback: (Location?) -> Unit) -> Unit,
+        entry: DiaryEntry? = null
     ) {
-        var title by remember { mutableStateOf(TextFieldValue()) }
-        var content by remember { mutableStateOf(TextFieldValue()) }
+        var title by remember { mutableStateOf(TextFieldValue(text = entry?.title?: "")) }
+        var content by remember { mutableStateOf(TextFieldValue(text = entry?.content?: "")) }
         var imageUri by remember { mutableStateOf<Uri?>(null) }
         var audioUri by remember { mutableStateOf<Uri?>(null) }
         var location by remember { mutableStateOf<Location?>(null) }
@@ -307,10 +279,7 @@ class MainActivity : ComponentActivity() {
                             imageUrl = imageUri?.toString(),
                             audioUrl = audioUri?.toString(),
                             location = location?.let { "${it.latitude}, ${it.longitude}" },
-                            cityName = getCityName(
-                                location?.latitude ?: 0.0,
-                                location?.longitude ?: 0.0
-                            ),
+                            cityName = getCityName(location?.latitude ?: 0.0, location?.longitude ?: 0.0),
                         )
                         onSave(entry)
                     }
@@ -322,26 +291,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
-    navController: NavController,
-    diaryEntries: Map<String, DiaryEntry>,
-    modifier: Modifier
-) {
+fun HomeScreen(navController: NavController, diaryEntries: Map<String, DiaryEntry>, modifier: Modifier) {
 
     Column(
         modifier = modifier.fillMaxSize(),
     ) {
-        TopAppBar(
-            title = { Text("Diary Entries") },
-        )
+            TopAppBar(
+                title = { Text("Diary Entries") },
+            )
 
 
         LazyColumn() {
             items(diaryEntries.keys.toList()) { key ->
-                DiaryEntryCard(diaryEntries.get(key)!!, navController, key)
+                DiaryEntryCard(diaryEntries.get(key)!!, navController,key)
             }
 
         }
@@ -351,46 +315,45 @@ fun HomeScreen(
         FloatingActionButton(
             modifier = Modifier.offset(x = -16.dp, y = -16.dp),
             onClick = { navController.navigate("addEntry") },
-            content = {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = stringResource(id = R.string.add_entry)
-                )
-            }
+            content = { Icon(Icons.Filled.Add, contentDescription = stringResource(id = R.string.add_entry)) }
         )
     }
 }
-
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DiaryEntryDetailScreen(entry: DiaryEntry, modifier: Modifier) {
-    Scaffold(modifier = modifier) {
-        Column(modifier = Modifier.padding(40.dp)) {
-            Text(text = "Title: ${entry.title}", style = MaterialTheme.typography.labelSmall)
+fun DiaryEntryDetailScreen(navController: NavController, id: String, entry: DiaryEntry, modifier: Modifier){
+Scaffold(modifier = modifier) {
+    Column(modifier = Modifier.padding(40.dp)) {
+        Text(text = "Title: ${entry.title}", style = MaterialTheme.typography.labelSmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "Content: ${entry.content}", style = MaterialTheme.typography.bodySmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        entry.imageUrl?.let {
+            Text(text = "Image URL: $it", style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Content: ${entry.content}", style = MaterialTheme.typography.bodySmall)
+        }
+        entry.audioUrl?.let {
+            Text(text = "Audio URL: $it", style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(8.dp))
-            entry.imageUrl?.let {
-                Text(text = "Image URL: $it", style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            entry.audioUrl?.let {
-                Text(text = "Audio URL: $it", style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            Text(text = "Location: ${entry.location}", style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "City: ${entry.cityName}", style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Timestamp: ${formatDate(entry.timestamp)}",
-                style = MaterialTheme.typography.bodySmall
-            )
+        }
+
+        Text(text = "Location: ${entry.location}", style = MaterialTheme.typography.bodySmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = "City: ${entry.cityName}", style = MaterialTheme.typography.bodySmall)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Timestamp: ${formatDate(entry.timestamp)}",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Button(onClick = {
+            navController.navigate("editEntry/${id}")
+        }) {
+            Text("Edit")
         }
     }
 }
-
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) {
@@ -415,77 +378,10 @@ fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) 
             Text(
                 text = "${formatDate(entry.timestamp)}",
             )
-            Button(onClick = { navController.navigate("editEntry/${id}") }) {
-                Text("Edit")
-            }
         }
     }
 }
 
-@Composable
-fun EditEntryScreen(
-    entry: DiaryEntry,
-    onSave: (DiaryEntry) -> Unit,
-    modifier: Modifier,
-    getLocation: (callback: (Location?) -> Unit) -> Unit
-) {
-    var title by remember { mutableStateOf(TextFieldValue(entry.title)) }
-    var content by remember { mutableStateOf(TextFieldValue(entry.content)) }
-    var imageUri by remember { mutableStateOf(entry.imageUrl?.let { Uri.parse(it) }) }
-    var audioUri by remember { mutableStateOf(entry.audioUrl?.let { Uri.parse(it) }) }
-    var location by remember { mutableStateOf<Location?>(null) }
-    val context = LocalContext.current
-    Column(modifier = modifier.fillMaxSize()) {
-        Text(
-            text = "Edit Diary Entry",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        TextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text("Title") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        TextField(
-            value = content,
-            onValueChange = { content = it },
-            label = { Text("Content") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        )
-        Button(onClick = { /* launch image picker */ }) {
-            Text("Change Image")
-        }
-        Button(onClick = { /* launch audio recorder */ }) {
-            Text("Change Audio")
-        }
-        Button(
-            onClick = {
-                getLocation { loc ->
-                    location = loc
-                    val updatedEntry = DiaryEntry(
-                        title = title.text,
-                        content = content.text,
-                        imageUrl = imageUri?.toString(),
-                        audioUrl = audioUri?.toString(),
-                        location = location?.let { "${it.latitude}, ${it.longitude}" },
-//                        cityName = getCityName(
-//                            location?.latitude ?: 0.0,
-//                            location?.longitude ?: 0.0
-//                        ),
-                    )
-                    onSave(updatedEntry)
-                }
-            },
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text("Save")
-        }
-    }
-}
 fun formatDate(timestamp: Long): String {
     val sdf = java.text.SimpleDateFormat("dd-MM-yyyy HH:mm", java.util.Locale.getDefault())
     val date = java.util.Date(timestamp)
