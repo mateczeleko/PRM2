@@ -480,8 +480,8 @@ fun startRecording(context: Context) {
     mediaRecorder = MediaRecorder().apply {
         try {
             setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             setOutputFile(output)
 
             prepare()
@@ -502,7 +502,7 @@ suspend fun stopRecording(title: String): Blob {
     mediaRecorder = null
     val bomba = title
     val storage = Firebase.storage
-    val storageRef = storage.reference.child("audio/$bomba.3gp")
+    val storageRef = storage.reference.child("audio/$bomba.wav")
     delay(1000)
     val audioFile = File(output!!)
     val audioData = audioFile.readBytes()
