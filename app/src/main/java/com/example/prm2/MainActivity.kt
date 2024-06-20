@@ -177,7 +177,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("map") {
-                            GoogleMapScreen()
+                            GoogleMapScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                entries = diaryEntries
+                            )
                         }
                     }
                 }
