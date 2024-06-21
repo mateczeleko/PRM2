@@ -1,4 +1,11 @@
 <resources>
     <string name="app_name">PRM2</string>
-    <string name="add_entry">opis</string>
+    <string name="add_entry">Add entry</string>
+    <string name="save">Save</string>
+    <string name="stop_recording">Stop Recording</string>
+    <string name="start_recording">Start Recording</string>
+    <string name="add_image">Add Image</string>
+    <string name="content">Content</string>
+    <string name="title">Title</string>
+    <string name="new_diary_entry">New Diary Entry</string>
 </resources>

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
+import android.location.LocationManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
@@ -17,6 +18,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -48,7 +50,10 @@ import com.example.prm2.ui.theme.PRM2Theme
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
+import com.google.android.gms.location.LocationListener
+import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.GoogleMap
 import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FirebaseFirestore
@@ -88,11 +93,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         geofencingClient = LocationServices.getGeofencingClient(this)
-//        createGeofence(googleMap = null)
-//        removeGeofence()
+
         enableEdgeToEdge()
         setContent {
             PRM2Theme {
+                val authenticated = remember { mutableStateOf(false) }
                 val navController = rememberNavController()
                 var diaryEntries by remember { mutableStateOf(mapOf<String, DiaryEntry>()) }
                 fun refreshEntries() {
@@ -110,7 +115,9 @@ class MainActivity : ComponentActivity() {
                         .fillMaxSize()
                         .padding(bottom = 16.dp),
 
+
                     topBar = {
+                        if (authenticated.value)
                         TopAppBar(
                             title = {
                                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -128,7 +135,27 @@ class MainActivity : ComponentActivity() {
                         })
                     }
                 ) { innerPadding ->
-                    NavHost(navController = navController, startDestination = "home") {
+                    NavHost(navController = navController, startDestination = "pin") {
+                        composable("pin") {
+                            val pin = remember { mutableStateOf("") }
+                            Column(modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Enter PIN")
+                                TextField(value = pin.value, onValueChange = { pin.value = it})
+                                Button(onClick = {
+                                    if (pin.value == "1234") {
+                                        authenticated.value = true
+                                        navController.navigate("home")
+                                    } else {
+                                        Toast.makeText(this@MainActivity, "Invalid PIN", Toast.LENGTH_SHORT).show()
+                                        pin.value = ""
+                                    }
+                                }) {
+                                    Text("Submit")
+                                }
+                            }
+                        }
                         composable("home") {
                             HomeScreen(
                                 navController = navController,
@@ -268,6 +295,12 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation(callback: (Location?) -> Unit) {
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+//        val locationRequest = LocationRequest.create().apply {
+//            interval = 10000 // Sets the desired interval for active location updates, in milliseconds.
+//            fastestInterval = 5000 // Sets the fastest rate for active location updates, in milliseconds.
+//            priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY // Sets the priority of the request.
+//        }
+//        locationRequest
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -287,9 +320,14 @@ class MainActivity : ComponentActivity() {
             )
             return
         }
-        fusedLocationClient.lastLocation
+//        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+//        val locationListener = LocationListener {
+//            println("AAAAA"+it.toString())
+//        }
+            fusedLocationClient.lastLocation
             .addOnSuccessListener { location: Location? ->
                 callback(location)
+                println("Location: $location")
             }
     }
 
@@ -315,27 +353,27 @@ class MainActivity : ComponentActivity() {
         var isRecording by remember { mutableStateOf(false) }
         Column(modifier = modifier.fillMaxSize()) {
             Text(
-                text = "New Diary Entry",
+                text = stringResource(R.string.new_diary_entry),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             TextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.title)) },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(16.dp))
             TextField(
                 value = content,
                 onValueChange = { content = it },
-                label = { Text("Content") },
+                label = { Text(stringResource(R.string.content)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             )
             Button(onClick = { /* launch image picker */ }) {
-                Text("Add Image")
+                Text(stringResource(R.string.add_image))
             }
             Button(onClick = {
                 if (isRecording) {
@@ -349,7 +387,7 @@ class MainActivity : ComponentActivity() {
                     isRecording = true
                 }
             }) {
-                Text(if (isRecording) "Stop Recording" else "Start Recording")
+                Text(if (isRecording) stringResource(R.string.stop_recording) else stringResource(R.string.start_recording))
             }
             Button(
                 onClick = {
@@ -359,7 +397,7 @@ class MainActivity : ComponentActivity() {
                             title = title.text,
                             content = content.text,
                             imageUrl = imageUri?.toString(),
-                            audioData = audioBlob,
+//                            audioData = audioBlob,
                             audioUrl = audioUri?.toString(),
                             location = location?.let { "${it.latitude}, ${it.longitude}" },
                             cityName = getCityName(
@@ -372,7 +410,7 @@ class MainActivity : ComponentActivity() {
                 },
                 modifier = Modifier.align(Alignment.End)
             ) {
-                Text("Save")
+                Text(stringResource(R.string.save))
             }
         }
     }
@@ -395,7 +433,6 @@ fun HomeScreen(
                 IconButton(onClick = { navController.navigate("map") }) {
                     Icon(
                         Icons.Filled.Place,
-//                        contentDescription = stringResource(id = R.string.add_entry)
                         contentDescription = null
                     )
                 }
@@ -538,23 +575,6 @@ suspend fun stopRecording(title: String): Blob {
     val uploadTask = storageRef.putBytes(audioBlob.toBytes())
     return audioBlob
 }
-
-//fun startPlaying() {
-//    mediaPlayer = MediaPlayer().apply {
-//        try {
-//            setDataSource(output)
-//            prepare()
-//            start()
-//        } catch (e: IOException) {
-//            e.printStackTrace()
-//        }
-//    }
-//}
-//
-//fun stopPlaying() {
-//    mediaPlayer?.release()
-//    mediaPlayer = null
-//}
 
 
 

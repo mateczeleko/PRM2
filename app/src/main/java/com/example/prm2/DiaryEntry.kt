@@ -9,7 +9,7 @@ data class DiaryEntry(
     val title: String = "",
     val content: String = "",
     val imageUrl: String? = null,
-    val audioData: Blob? = null,
+//    val audioData: Blob? = null,
     val audioUrl: String? = null,
     val location: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
