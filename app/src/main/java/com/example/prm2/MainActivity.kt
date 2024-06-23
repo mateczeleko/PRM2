@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
-import android.location.LocationManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
@@ -50,23 +49,18 @@ import com.example.prm2.ui.theme.PRM2Theme
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
-import com.google.android.gms.location.LocationListener
-import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.GoogleMap
 import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.ktx.storage
-import com.google.protobuf.ByteString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import java.io.IOException
 import java.util.Locale
 
 private var mediaRecorder: MediaRecorder? = null
@@ -77,6 +71,7 @@ private var output: String? = null
 class MainActivity : ComponentActivity() {
     private val db: FirebaseFirestore by lazy { Firebase.firestore }
     private val RADIUS = 100f
+    private val locationHelper by lazy { LocationHelper(this) }
     private val geofenceList = mutableListOf<Geofence>()
     private val geofencePendingIntent: PendingIntent by lazy {
         val intent = Intent(this, GeofenceBroadcastReceiver::class.java)
@@ -108,6 +103,10 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     refreshEntries()
+                }
+
+                LaunchedEffect(locationHelper.currentLocation.value) {
+                    println("AAAAALocation: ${locationHelper.currentLocation.value}")
                 }
 
                 Scaffold(
@@ -294,13 +293,6 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation(callback: (Location?) -> Unit) {
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-//        val locationRequest = LocationRequest.create().apply {
-//            interval = 10000 // Sets the desired interval for active location updates, in milliseconds.
-//            fastestInterval = 5000 // Sets the fastest rate for active location updates, in milliseconds.
-//            priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY // Sets the priority of the request.
-//        }
-//        locationRequest
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -320,15 +312,30 @@ class MainActivity : ComponentActivity() {
             )
             return
         }
-//        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
-//        val locationListener = LocationListener {
-//            println("AAAAA"+it.toString())
-//        }
-            fusedLocationClient.lastLocation
-            .addOnSuccessListener { location: Location? ->
-                callback(location)
-                println("Location: $location")
-            }
+        val latLng = locationHelper.currentLocation.value
+        val location = Location("")
+        location.latitude = latLng.latitude
+        location.longitude = latLng.longitude
+        callback(location)
+    }
+
+    // implement onresume
+    @SuppressLint("MissingPermission")
+    override fun onResume() {
+        super.onResume()
+        locationHelper.startLocationUpdates()
+    }
+
+
+    //implement onPause
+    override fun onPause() {
+        super.onPause()
+        locationHelper.stopLocationUpdates()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        locationHelper.stopLocationUpdates()
     }
 
     companion object {
