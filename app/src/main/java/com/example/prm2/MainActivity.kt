@@ -6,17 +6,27 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ImageDecoder
+import android.graphics.Paint
 import android.location.Geocoder
 import android.location.Location
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +46,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
@@ -45,6 +56,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.prm2.MainActivity.Companion.LOCATION_PERMISSION_REQUEST_CODE
 import com.example.prm2.ui.theme.PRM2Theme
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
@@ -55,11 +67,13 @@ import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.UploadTask
 import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.util.Locale
 
@@ -72,23 +86,11 @@ class MainActivity : ComponentActivity() {
     private val db: FirebaseFirestore by lazy { Firebase.firestore }
     private val RADIUS = 100f
     private val locationHelper by lazy { LocationHelper(this) }
-    private val geofenceList = mutableListOf<Geofence>()
-    private val geofencePendingIntent: PendingIntent by lazy {
-        val intent = Intent(this, GeofenceBroadcastReceiver::class.java)
-        PendingIntent.getBroadcast(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-    }
-    lateinit var geofencingClient: GeofencingClient
+
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        geofencingClient = LocationServices.getGeofencingClient(this)
-
         enableEdgeToEdge()
         setContent {
             PRM2Theme {
@@ -172,7 +174,8 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.padding(innerPadding),
                                 getLocation = { callback ->
                                     getCurrentLocation(callback)
-                                }
+                                },
+                                navController = navController
                             )
                         }
                         composable("entry/{id}") { backStackEntry ->
@@ -199,7 +202,8 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.padding(innerPadding),
                                 getLocation = { callback ->
                                     getCurrentLocation(callback)
-                                }
+                                },
+                                navController = navController
                             )
                         }
                         composable("map") {
@@ -208,6 +212,9 @@ class MainActivity : ComponentActivity() {
                                 entries = diaryEntries
                             )
                         }
+                        composable("imagePicker") {
+                            ImagePickerAndEditor()
+                        }
                     }
                 }
             }
@@ -215,7 +222,6 @@ class MainActivity : ComponentActivity() {
         }
 
     }
-
     fun getCityName(lat: Double, long: Double): String {
         val geoCoder = Geocoder(this, Locale.getDefault())
         return geoCoder.getFromLocation(lat, long, 1)?.let { address ->
@@ -223,73 +229,6 @@ class MainActivity : ComponentActivity() {
         } ?: "unknown city"
     }
 
-    fun getGeofenceRequest(): GeofencingRequest {
-        return GeofencingRequest.Builder().apply {
-            setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-            addGeofences(geofenceList)
-        }.build()
-    }
-
-    fun addGeofenceRequest() {
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return
-        }
-        geofencingClient.addGeofences(getGeofenceRequest(), geofencePendingIntent).run {
-            addOnSuccessListener {
-                Toast.makeText(
-                    this@MainActivity,
-                    "Geofence is added successfully",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-            addOnFailureListener {
-                Log.e("Error", it.localizedMessage)
-                Toast.makeText(this@MainActivity, it.message, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    fun createGeofence(googleMap: GoogleMap) {
-        //Write here for the geo fence
-        googleMap.setOnMapClickListener { latLng ->
-            geofenceList.add(
-                Geofence.Builder()
-                    .setRequestId("entry.key")
-                    .setCircularRegion(latLng.latitude, latLng.longitude, RADIUS)
-                    .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
-                    .build()
-            )
-//            drawCircleOnMap(latLng)
-            addGeofenceRequest()
-        }
-    }
-
-    fun removeGeofence() {
-        geofencingClient.removeGeofences(geofencePendingIntent).run {
-            addOnSuccessListener {
-                Toast.makeText(
-                    this@MainActivity,
-                    "Geofence is removed successfully",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-            addOnFailureListener {
-                Toast.makeText(this@MainActivity, it.message, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
 
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation(callback: (Location?) -> Unit) {
@@ -347,14 +286,16 @@ class MainActivity : ComponentActivity() {
         onSave: (DiaryEntry) -> Unit,
         modifier: Modifier,
         getLocation: (callback: (Location?) -> Unit) -> Unit,
-        entry: DiaryEntry? = null
+        entry: DiaryEntry? = null,
+        navController: NavController
     ) {
 
         var audioBlob by remember { mutableStateOf<Blob?>(null) }
         var title by remember { mutableStateOf(TextFieldValue(text = entry?.title ?: "")) }
         var content by remember { mutableStateOf(TextFieldValue(text = entry?.content ?: "")) }
-        var imageUri by remember { mutableStateOf<Uri?>(null) }
-        var audioUri by remember { mutableStateOf<Uri?>(null) }
+        var imageUri = remember { mutableStateOf<Uri?>(null) }
+        var audioUrl = remember { mutableStateOf<String?>(null) }
+//        var audioUrl = remember { mutableStateOf<String?>("") }
         var location by remember { mutableStateOf<Location?>(null) }
         val context = LocalContext.current
         var isRecording by remember { mutableStateOf(false) }
@@ -379,13 +320,15 @@ class MainActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .weight(1f)
             )
-            Button(onClick = { /* launch image picker */ }) {
+            Button(onClick = {
+                navController.navigate("imagePicker")
+            }) {
                 Text(stringResource(R.string.add_image))
             }
             Button(onClick = {
                 if (isRecording) {
                     CoroutineScope(Dispatchers.IO).launch {
-                        audioBlob = stopRecording(title.text)
+                        audioUrl.value = stopRecording(title.text)
                         isRecording = false
                     }
 
@@ -403,9 +346,8 @@ class MainActivity : ComponentActivity() {
                         val entry = DiaryEntry(
                             title = title.text,
                             content = content.text,
-                            imageUrl = imageUri?.toString(),
-//                            audioData = audioBlob,
-                            audioUrl = audioUri?.toString(),
+                            imageUrl = imageUri.value?.toString(),
+                            audioUrl = audioUrl.value,
                             location = location?.let { "${it.latitude}, ${it.longitude}" },
                             cityName = getCityName(
                                 location?.latitude ?: 0.0,
@@ -538,6 +480,55 @@ fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) 
     }
 }
 
+@Composable
+fun ImagePickerAndEditor() {
+    val context = LocalContext.current
+    val imageUri = remember { mutableStateOf<Uri?>(null) }
+    val textOnImage = remember { mutableStateOf("Your Text") }
+
+    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        imageUri.value = uri
+    }
+
+    Column(
+        modifier = Modifier.padding(top=200.dp),
+    ) {
+        Button(onClick = { launcher.launch("image/*") }) {
+            Text("Pick an image")
+        }
+        Text(text = "Hello, World!")
+
+        if (imageUri.value != null) {
+            val bitmap = getBitmapFromUri(context, imageUri.value!!)
+            val editedBitmap = addTextToBitmap(bitmap, textOnImage.value)
+            Image(bitmap = editedBitmap.asImageBitmap(), contentDescription = null)
+        } else {
+            Text("No image selected yet")
+        }
+    }
+}
+
+fun getBitmapFromUri(context: Context, uri: Uri): Bitmap {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+    } else {
+        MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+    }
+}
+
+fun addTextToBitmap(bitmap: Bitmap, text: String): Bitmap {
+//    val copyBitmap = bitmap.copy(bitmap.config, false)
+    val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+    val canvas = Canvas(mutableBitmap)
+    val paint = Paint().apply {
+        color = Color.RED
+        textSize = 50f
+        style = Paint.Style.FILL
+    }
+    canvas.drawText(text, 50f, 50f, paint)
+    return mutableBitmap
+}
+
 fun formatDate(timestamp: Long): String {
     val sdf = java.text.SimpleDateFormat("dd-MM-yyyy HH:mm", java.util.Locale.getDefault())
     val date = java.util.Date(timestamp)
@@ -565,23 +556,31 @@ fun startRecording(context: Context) {
 }
 
 @SuppressLint("RestrictedApi")
-suspend fun stopRecording(title: String): Blob {
+suspend fun stopRecording(title: String): String {
     mediaRecorder?.apply {
         stop()
         release()
     }
     mediaRecorder = null
+
     val bomba = title
     val storage = Firebase.storage
-    val storageRef = storage.reference.child("audio/$bomba.wav")
+    val storageRef = storage.reference.child("audio/$bomba.mp4")
     delay(1000)
     val audioFile = File(output!!)
     val audioData = audioFile.readBytes()
     val audioBlob = Blob.fromBytes(audioData)
     Log.d("Audio data size", "${audioData.size}")
-    val uploadTask = storageRef.putBytes(audioBlob.toBytes())
-    return audioBlob
+    val uploadTask = storageRef.putBytes(audioBlob.toBytes()).onSuccessTask { task ->
+        task.storage.downloadUrl
+    }
+//    return uploadTask.snapshot.storage.downloadUrl.toString()
+    return uploadTask.await().toString()
 }
+
+
+
+
 
 
 
