@@ -56,18 +56,11 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.prm2.MainActivity.Companion.LOCATION_PERMISSION_REQUEST_CODE
 import com.example.prm2.ui.theme.PRM2Theme
-import com.google.android.gms.location.Geofence
-import com.google.android.gms.location.GeofencingClient
-import com.google.android.gms.location.GeofencingRequest
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.GoogleMap
 import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import com.google.firebase.storage.UploadTask
 import com.google.firebase.storage.ktx.storage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -217,6 +210,9 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
+            Intent(this, LocationCheckService::class.java).also { intent ->
+                startService(intent)
             }
 
         }
@@ -582,17 +578,6 @@ suspend fun stopRecording(title: String): String {
 //    return uploadTask.snapshot.storage.downloadUrl.toString()
     return uploadTask.await().toString()
 }
-fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-    val R = 6371
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = (Math.sin(dLat / 2) * Math.sin(dLat / 2)
-            + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-            * Math.sin(dLon / 2) * Math.sin(dLon / 2))
-    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    return (R * c * 1000).toFloat() //meter converter
-}
-
 
 
 
