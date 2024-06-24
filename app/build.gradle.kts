@@ -51,6 +51,7 @@ android {
 }
 
 dependencies {
+    implementation("io.coil-kt:coil-compose:2.2.2")
     implementation("com.google.maps.android:maps-compose:5.0.3")
     implementation("com.google.maps.android:maps-compose-utils:5.0.3")
     implementation ("com.google.maps.android:maps-compose-widgets:5.0.3")

@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -69,6 +70,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.util.Locale
+import coil.compose.rememberImagePainter
+import coil.compose.AsyncImage
 
 private var mediaRecorder: MediaRecorder? = null
 private var mediaPlayer: MediaPlayer? = null
@@ -288,15 +291,18 @@ class MainActivity : ComponentActivity() {
         entry: DiaryEntry? = null,
         navController: NavController
     ) {
-
-        var audioBlob by remember { mutableStateOf<Blob?>(null) }
         var title by remember { mutableStateOf(TextFieldValue(text = entry?.title ?: "")) }
         var content by remember { mutableStateOf(TextFieldValue(text = entry?.content ?: "")) }
-        var imageUri = remember { mutableStateOf<Uri?>(null) }
-        var audioUrl = remember { mutableStateOf<String?>(null) }
+        var imageUri by remember { mutableStateOf<Uri?>(null) }
+        var audioUrl by remember { mutableStateOf<String?>(null) }
         var location by remember { mutableStateOf<Location?>(null) }
         val context = LocalContext.current
         var isRecording by remember { mutableStateOf(false) }
+
+        val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+            imageUri = uri
+        }
+
         Column(modifier = modifier.fillMaxSize()) {
             Text(
                 text = stringResource(R.string.new_diary_entry),
@@ -318,19 +324,23 @@ class MainActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .weight(1f)
             )
-            Button(onClick = {
-                navController.navigate("imagePicker")
-
-            }) {
+            Button(onClick = { launcher.launch("image/*") }) {
                 Text(stringResource(R.string.add_image))
+            }
+            imageUri?.let { uri ->
+                Image(
+                    painter = rememberImagePainter(uri),
+                    contentDescription = "Selected image",
+                    modifier = Modifier
+                        .padding(16.dp).size(200.dp)
+                )
             }
             Button(onClick = {
                 if (isRecording) {
                     CoroutineScope(Dispatchers.IO).launch {
-                        audioUrl.value = stopRecording(title.text)
+                        audioUrl = stopRecording(title.text)
                         isRecording = false
                     }
-
                 } else {
                     startRecording(context)
                     isRecording = true
@@ -342,18 +352,21 @@ class MainActivity : ComponentActivity() {
                 onClick = {
                     getLocation { loc ->
                         location = loc
-                        val entry = DiaryEntry(
-                            title = title.text,
-                            content = content.text,
-                            imageUrl = imageUri.value?.toString(),
-                            audioUrl = audioUrl.value,
-                            location = location?.let { "${it.latitude}, ${it.longitude}" },
-                            cityName = getCityName(
-                                location?.latitude ?: 0.0,
-                                location?.longitude ?: 0.0
-                            ),
-                        )
-                        onSave(entry)
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val imageUrl = imageUri?.let { uploadImageToFirebase(it, context) }
+                            val entry = DiaryEntry(
+                                title = title.text,
+                                content = content.text,
+                                imageUrl = imageUrl,
+                                audioUrl = audioUrl,
+                                location = location?.let { "${it.latitude}, ${it.longitude}" },
+                                cityName = getCityName(
+                                    location?.latitude ?: 0.0,
+                                    location?.longitude ?: 0.0
+                                ),
+                            )
+                            onSave(entry)
+                        }
                     }
                 },
                 modifier = Modifier.align(Alignment.End)
@@ -361,6 +374,13 @@ class MainActivity : ComponentActivity() {
                 Text(stringResource(R.string.save))
             }
         }
+    }
+
+    suspend fun uploadImageToFirebase(uri: Uri, context: Context): String {
+        val storage = Firebase.storage
+        val storageRef = storage.reference.child("images/${System.currentTimeMillis()}.jpg")
+        val uploadTask = storageRef.putFile(uri)
+        return uploadTask.await().storage.downloadUrl.await().toString()
     }
 
 }
