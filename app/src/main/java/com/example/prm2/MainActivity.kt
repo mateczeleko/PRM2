@@ -73,6 +73,7 @@ import java.util.Locale
 private var mediaRecorder: MediaRecorder? = null
 private var mediaPlayer: MediaPlayer? = null
 private var output: String? = null
+private lateinit var permissionHelper: PermissionHelper
 
 @Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
@@ -85,6 +86,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        permissionHelper = PermissionHelper(this)
+        permissionHelper.checkAndRequestPermissions()
         setContent {
             PRM2Theme {
                 val authenticated = remember { mutableStateOf(false) }
@@ -359,6 +362,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -578,6 +582,7 @@ suspend fun stopRecording(title: String): String {
 //    return uploadTask.snapshot.storage.downloadUrl.toString()
     return uploadTask.await().toString()
 }
+
 
 
 
