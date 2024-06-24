@@ -295,7 +295,6 @@ class MainActivity : ComponentActivity() {
         var content by remember { mutableStateOf(TextFieldValue(text = entry?.content ?: "")) }
         var imageUri = remember { mutableStateOf<Uri?>(null) }
         var audioUrl = remember { mutableStateOf<String?>(null) }
-//        var audioUrl = remember { mutableStateOf<String?>("") }
         var location by remember { mutableStateOf<Location?>(null) }
         val context = LocalContext.current
         var isRecording by remember { mutableStateOf(false) }
@@ -322,6 +321,7 @@ class MainActivity : ComponentActivity() {
             )
             Button(onClick = {
                 navController.navigate("imagePicker")
+
             }) {
                 Text(stringResource(R.string.add_image))
             }
@@ -473,6 +473,11 @@ fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) 
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
+            entry.imageUrl?.let {
+                val imageBitmap = getBitmapFromUri(LocalContext.current, Uri.parse(it))
+                Image(bitmap = imageBitmap.asImageBitmap(), contentDescription = null)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Text(
                 text = "${formatDate(entry.timestamp)}",
             )
@@ -576,6 +581,16 @@ suspend fun stopRecording(title: String): String {
     }
 //    return uploadTask.snapshot.storage.downloadUrl.toString()
     return uploadTask.await().toString()
+}
+fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+    val R = 6371
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = (Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+            * Math.sin(dLon / 2) * Math.sin(dLon / 2))
+    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return (R * c * 1000).toFloat() //meter converter
 }
 
 
