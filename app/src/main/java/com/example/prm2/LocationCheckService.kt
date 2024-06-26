@@ -44,7 +44,7 @@ class LocationCheckService : Service() {
                         )
 
                         val wasInside = entryStates[id] ?: false
-                        val isInside = distance <= 1000 // 1000 meters = 1 km
+                        val isInside = distance <= 1000
 
                         if (isInside && !wasInside) {
                             // Entered the radius
@@ -87,6 +87,7 @@ class LocationCheckService : Service() {
             .setContentTitle("Entered Diary Entry Area")
             .setContentText("You've entered the area of your diary entry: $title")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+//            .setOngoing(true)
             .setAutoCancel(true)
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -95,7 +96,7 @@ class LocationCheckService : Service() {
             val channel = NotificationChannel(
                 channelId,
                 "Location Alerts",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_DEFAULT // or IMPORTANCE_LOW
             )
             notificationManager.createNotificationChannel(channel)
         }

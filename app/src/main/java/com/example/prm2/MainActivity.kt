@@ -2,7 +2,6 @@ package com.example.prm2
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -43,8 +42,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -57,6 +71,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberImagePainter
 import com.example.prm2.ui.theme.PRM2Theme
 import com.google.firebase.firestore.Blob
 import com.google.firebase.firestore.FirebaseFirestore
@@ -70,8 +85,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.util.Locale
-import coil.compose.rememberImagePainter
-import coil.compose.AsyncImage
 
 private var mediaRecorder: MediaRecorder? = null
 private var mediaPlayer: MediaPlayer? = null
@@ -118,37 +131,45 @@ class MainActivity : ComponentActivity() {
 
                     topBar = {
                         if (authenticated.value)
-                        TopAppBar(
-                            title = {
-                                Box(modifier = Modifier.fillMaxWidth()) {
-                                    FloatingActionButton(
-                                        onClick = { navController.navigate(route = "home") },
-                                        content = { Icon(
-                                            imageVector = Icons.Filled.Home,
-                                            contentDescription = null
-                                        ) },
-                                        modifier = Modifier.align(Alignment.Center)
-                                    )
-                                }
+                            TopAppBar(
+                                title = {
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        FloatingActionButton(
+                                            onClick = { navController.navigate(route = "home") },
+                                            content = {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Home,
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            modifier = Modifier.align(Alignment.Center)
+                                        )
+                                    }
 
 
-                        })
+                                })
                     }
                 ) { innerPadding ->
                     NavHost(navController = navController, startDestination = "pin") {
                         composable("pin") {
                             val pin = remember { mutableStateOf("") }
-                            Column(modifier = Modifier.fillMaxSize(),
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Text("Enter PIN")
-                                TextField(value = pin.value, onValueChange = { pin.value = it})
+                                TextField(value = pin.value, onValueChange = { pin.value = it })
                                 Button(onClick = {
                                     if (pin.value == "1234") {
                                         authenticated.value = true
                                         navController.navigate("home")
                                     } else {
-                                        Toast.makeText(this@MainActivity, "Invalid PIN", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "Invalid PIN",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                         pin.value = ""
                                     }
                                 }) {
@@ -224,6 +245,7 @@ class MainActivity : ComponentActivity() {
         }
 
     }
+
     fun getCityName(lat: Double, long: Double): String {
         val geoCoder = Geocoder(this, Locale.getDefault())
         return geoCoder.getFromLocation(lat, long, 1)?.let { address ->
@@ -294,14 +316,16 @@ class MainActivity : ComponentActivity() {
         var title by remember { mutableStateOf(TextFieldValue(text = entry?.title ?: "")) }
         var content by remember { mutableStateOf(TextFieldValue(text = entry?.content ?: "")) }
         var imageUri by remember { mutableStateOf<Uri?>(null) }
+        var imageUrl by remember { mutableStateOf<String?>(null) }
         var audioUrl by remember { mutableStateOf<String?>(null) }
         var location by remember { mutableStateOf<Location?>(null) }
         val context = LocalContext.current
         var isRecording by remember { mutableStateOf(false) }
 
-        val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-            imageUri = uri
-        }
+        val launcher =
+            rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+                imageUri = uri
+            }
 
         Column(modifier = modifier.fillMaxSize()) {
             Text(
@@ -332,7 +356,8 @@ class MainActivity : ComponentActivity() {
                     painter = rememberImagePainter(uri),
                     contentDescription = "Selected image",
                     modifier = Modifier
-                        .padding(16.dp).size(200.dp)
+                        .padding(16.dp)
+                        .size(200.dp)
                 )
             }
             Button(onClick = {
@@ -352,21 +377,27 @@ class MainActivity : ComponentActivity() {
                 onClick = {
                     getLocation { loc ->
                         location = loc
-                        CoroutineScope(Dispatchers.IO).launch {
-                            val imageUrl = imageUri?.let { uploadImageToFirebase(it, context) }
-                            val entry = DiaryEntry(
-                                title = title.text,
-                                content = content.text,
-                                imageUrl = imageUrl,
-                                audioUrl = audioUrl,
-                                location = location?.let { "${it.latitude}, ${it.longitude}" },
-                                cityName = getCityName(
-                                    location?.latitude ?: 0.0,
-                                    location?.longitude ?: 0.0
-                                ),
-                            )
-                            onSave(entry)
+                        val coroutine =
+                            CoroutineScope(Dispatchers.IO).launch {
+                                imageUrl = imageUri?.let { uploadImageToFirebase(it) }
+                            }
+//                        println(coroutine.isCompleted)
+                        while (!coroutine.isCompleted) {
+                            println("Waiting for image upload")
                         }
+                        val entry = DiaryEntry(
+                            title = title.text,
+                            content = content.text,
+                            imageUrl = imageUrl.let { it } ?: "",
+                            audioUrl = audioUrl,
+                            location = location?.let { "${it.latitude}, ${it.longitude}" },
+                            cityName = getCityName(
+                                location?.latitude ?: 0.0,
+                                location?.longitude ?: 0.0
+                            ),
+                        )
+                        onSave(entry)
+
                     }
                 },
                 modifier = Modifier.align(Alignment.End)
@@ -376,7 +407,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    suspend fun uploadImageToFirebase(uri: Uri, context: Context): String {
+    suspend fun uploadImageToFirebase(uri: Uri): String {
         val storage = Firebase.storage
         val storageRef = storage.reference.child("images/${System.currentTimeMillis()}.jpg")
         val uploadTask = storageRef.putFile(uri)
@@ -494,9 +525,12 @@ fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) 
                 )
             }
             entry.imageUrl?.let {
-                val imageBitmap = getBitmapFromUri(LocalContext.current, Uri.parse(it))
-                Image(bitmap = imageBitmap.asImageBitmap(), contentDescription = null)
-                Spacer(modifier = Modifier.height(8.dp))
+                println(it)
+                Image(
+                    painter = rememberImagePainter(Uri.parse(it)),
+                    contentDescription = null,
+                    modifier = Modifier.size(200.dp)
+                )
             }
             Text(
                 text = "${formatDate(entry.timestamp)}",
@@ -511,12 +545,13 @@ fun ImagePickerAndEditor() {
     val imageUri = remember { mutableStateOf<Uri?>(null) }
     val textOnImage = remember { mutableStateOf("Your Text") }
 
-    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
-        imageUri.value = uri
-    }
+    val launcher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+            imageUri.value = uri
+        }
 
     Column(
-        modifier = Modifier.padding(top=200.dp),
+        modifier = Modifier.padding(top = 200.dp),
     ) {
         Button(onClick = { launcher.launch("image/*") }) {
             Text("Pick an image")
@@ -599,7 +634,6 @@ suspend fun stopRecording(title: String): String {
     val uploadTask = storageRef.putBytes(audioBlob.toBytes()).onSuccessTask { task ->
         task.storage.downloadUrl
     }
-//    return uploadTask.snapshot.storage.downloadUrl.toString()
     return uploadTask.await().toString()
 }
 
