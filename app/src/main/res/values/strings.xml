@@ -8,4 +8,18 @@
     <string name="content">Content</string>
     <string name="title">Title</string>
     <string name="new_diary_entry">New Diary Entry</string>
+    <string name="no_image_selected_yet">No image selected yet</string>
+    <string name="pick_an_image">Pick an image</string>
+    <string name="hello_world">Hello, World!</string>
+    <string name="edit">Edit</string>
+    <string name="timestamp">Timestamp: %1$s</string>
+    <string name="selected_image">Selected image</string>
+    <string name="diary_entries">Diary Entries</string>
+    <string name="location">Location: %1$s</string>
+    <string name="city">City: %1$s</string>
+    <string name="image_url">Image URL: %1$s</string>
+    <string name="audio_url">Audio URL: %1$s</string>
+    <string name="enter_pin">Enter PIN</string>
+    <string name="invalid_pin">Invalid PIN</string>
+    <string name="submit">Submit</string>
 </resources>

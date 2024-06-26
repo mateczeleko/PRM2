@@ -12,7 +12,6 @@ import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.location.Geocoder
 import android.location.Location
-import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
@@ -87,20 +86,19 @@ import java.io.File
 import java.util.Locale
 
 private var mediaRecorder: MediaRecorder? = null
-private var mediaPlayer: MediaPlayer? = null
 private var output: String? = null
 private lateinit var permissionHelper: PermissionHelper
 
 @Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
     private val db: FirebaseFirestore by lazy { Firebase.firestore }
-    private val RADIUS = 100f
     private val locationHelper by lazy { LocationHelper(this) }
 
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        addSampleEntries(db)
         enableEdgeToEdge()
         permissionHelper = PermissionHelper(this)
         permissionHelper.checkAndRequestPermissions()
@@ -158,7 +156,7 @@ class MainActivity : ComponentActivity() {
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("Enter PIN")
+                                Text(stringResource(R.string.enter_pin))
                                 TextField(value = pin.value, onValueChange = { pin.value = it })
                                 Button(onClick = {
                                     if (pin.value == "1234") {
@@ -167,13 +165,13 @@ class MainActivity : ComponentActivity() {
                                     } else {
                                         Toast.makeText(
                                             this@MainActivity,
-                                            "Invalid PIN",
+                                            getString(R.string.invalid_pin),
                                             Toast.LENGTH_SHORT
                                         ).show()
                                         pin.value = ""
                                     }
                                 }) {
-                                    Text("Submit")
+                                    Text(stringResource(R.string.submit))
                                 }
                             }
                         }
@@ -354,7 +352,7 @@ class MainActivity : ComponentActivity() {
             imageUri?.let { uri ->
                 Image(
                     painter = rememberImagePainter(uri),
-                    contentDescription = "Selected image",
+                    contentDescription = stringResource(R.string.selected_image),
                     modifier = Modifier
                         .padding(16.dp)
                         .size(200.dp)
@@ -428,7 +426,7 @@ fun HomeScreen(
         modifier = modifier.fillMaxSize(),
     ) {
         TopAppBar(
-            title = { Text("Diary Entries") },
+            title = { Text(stringResource(R.string.diary_entries)) },
             actions = {
                 IconButton(onClick = { navController.navigate("map") }) {
                     Icon(
@@ -473,31 +471,37 @@ fun DiaryEntryDetailScreen(
 ) {
     Scaffold(modifier = modifier) {
         Column(modifier = Modifier.padding(40.dp)) {
-            Text(text = "Title: ${entry.title}", style = MaterialTheme.typography.labelSmall)
+            Text(text = stringResource(R.string.title)+": ${entry.title}", style = MaterialTheme.typography.labelSmall)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Content: ${entry.content}", style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(R.string.content)+": ${entry.content}", style = MaterialTheme.typography.bodySmall)
             Spacer(modifier = Modifier.height(8.dp))
             entry.imageUrl?.let {
-                Text(text = "Image URL: $it", style = MaterialTheme.typography.bodySmall)
+                Text(text = stringResource(R.string.image_url, it), style = MaterialTheme.typography.bodySmall)
                 Spacer(modifier = Modifier.height(8.dp))
             }
             entry.audioUrl?.let {
-                Text(text = "Audio URL: $it", style = MaterialTheme.typography.bodySmall)
+                Text(text = stringResource(R.string.audio_url, it), style = MaterialTheme.typography.bodySmall)
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Text(text = "Location: ${entry.location}", style = MaterialTheme.typography.bodySmall)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "City: ${entry.cityName}", style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = stringResource(R.string.location, listOf(entry.location)),
+                style = MaterialTheme.typography.bodySmall
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Timestamp: ${formatDate(entry.timestamp)}",
+                text = stringResource(R.string.city, listOf(entry.cityName)),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.timestamp, formatDate(entry.timestamp)),
                 style = MaterialTheme.typography.bodySmall
             )
             Button(onClick = {
                 navController.navigate("editEntry/${id}")
             }) {
-                Text("Edit")
+                Text(stringResource(R.string.edit))
             }
         }
     }
@@ -520,7 +524,7 @@ fun DiaryEntryCard(entry: DiaryEntry, navController: NavController, id: String) 
             )
             entry.cityName?.let {
                 Text(
-                    text = "Location: $it",
+                    text = stringResource(R.string.city, it),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -554,16 +558,16 @@ fun ImagePickerAndEditor() {
         modifier = Modifier.padding(top = 200.dp),
     ) {
         Button(onClick = { launcher.launch("image/*") }) {
-            Text("Pick an image")
+            Text(stringResource(R.string.pick_an_image))
         }
-        Text(text = "Hello, World!")
+        Text(text = stringResource(R.string.hello_world))
 
         if (imageUri.value != null) {
             val bitmap = getBitmapFromUri(context, imageUri.value!!)
             val editedBitmap = addTextToBitmap(bitmap, textOnImage.value)
             Image(bitmap = editedBitmap.asImageBitmap(), contentDescription = null)
         } else {
-            Text("No image selected yet")
+            Text(stringResource(R.string.no_image_selected_yet))
         }
     }
 }
@@ -577,7 +581,6 @@ fun getBitmapFromUri(context: Context, uri: Uri): Bitmap {
 }
 
 fun addTextToBitmap(bitmap: Bitmap, text: String): Bitmap {
-//    val copyBitmap = bitmap.copy(bitmap.config, false)
     val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
     val canvas = Canvas(mutableBitmap)
     val paint = Paint().apply {
@@ -635,6 +638,36 @@ suspend fun stopRecording(title: String): String {
         task.storage.downloadUrl
     }
     return uploadTask.await().toString()
+}
+
+fun addSampleEntries(db: FirebaseFirestore) {
+    val sampleEntries = listOf(
+        DiaryEntry(
+            title = "Wyjscie na piwo",
+            content = "Wyszedlem ze starymi znajomymi w Londynie na piwo. Bylo super!",
+            imageUrl = "https://cdn.pixabay.com/photo/2016/09/14/11/35/beer-1669273_640.png",
+            audioUrl = "https://example.com/audio1.mp3",
+            location = "51.509865, -0.118092",
+            cityName = "London"
+        ),
+        DiaryEntry(
+            title = "Wycieczka nad ocean",
+            content = "Bylem nad oceanem w Brighton Beach",
+            imageUrl = "https://www.national-geographic.pl/media/cache/big/uploads/media/default/0014/71/morze-baltyckie.jpg",
+            audioUrl = "https://example.com/audio2.mp3",
+            location = "40.712776, -74.005974",
+            cityName = "New York"
+        )
+    )
+
+    getEntries(db) { existingEntries ->
+        val existingTitles = existingEntries.values.map { it.title }
+        sampleEntries.forEach { entry ->
+            if (entry.title !in existingTitles) {
+                addEntry(entry, db)
+            }
+        }
+    }
 }
 
 
